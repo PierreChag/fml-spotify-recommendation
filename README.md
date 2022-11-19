@@ -1,5 +1,7 @@
 # Machine Learning Project : Music Recommendation System using Spotify Database
 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/pierrechagn/fmlSpotifyRecommendation/main?labpath=ML%20-%20Spotify%20recommendation.ipynb)
+
 ### Authors :
 * Elie Trigano
 * Zachary Guenassia
