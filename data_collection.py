@@ -1,9 +1,11 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import hdf5_getters 
+"""
+README : This file contains the code for the data
+collection and extraction from the Million Song Dataset
+"""
 import os
+import pandas as pd
+import hdf5_getters
+
 
 # get the list of all the files inside the folder
 files = []
@@ -15,9 +17,17 @@ for i in os.listdir('MillionSongSubset'):
                     if k != '.DS_Store':
                         for l in os.listdir('MillionSongSubset/'+i+'/'+j+'/'+k):
                             if (l != '.DS_Store') & (l.endswith('.h5')):
-                                files.append('MillionSongSubset/'+i+'/'+j+'/'+k+'/'+l)            
+                                files.append('MillionSongSubset/'+i+'/'+j+'/'+k+'/'+l)           
 
 def data_extract(file):
+    """_summary_ : This function extracts the data from the hdf5 files and returns a dataframe
+
+    Args:
+        file: list of files to be extracted
+
+    Returns:
+        _dataframe_: dataframe of the extracted data
+    """
     data = pd.DataFrame()
 
     # get the data from the files to the dataframe
@@ -59,19 +69,6 @@ def data_extract(file):
                             'year': hdf5_getters.get_year(h5)}, ignore_index=True)
         h5.close()
     return data
-
-
-# get the artist name and the song title for all the files
-"""artist_name = []
-song_title = []
-for i in files:
-    h5 = hdf5_getters.open_h5_file_read(i)
-    artist_name.append(hdf5_getters.get_artist_name(h5).decode('utf-8'))
-    song_title.append(hdf5_getters.get_title(h5).decode('utf-8'))
-    h5.close()
-
-print(artist_name)
-print(song_title)"""
 
 if __name__ == '__main__':
     data = data_extract(files)
