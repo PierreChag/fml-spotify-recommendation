@@ -6,6 +6,13 @@
 * Thomas Taylor
 * Pierre Chagnon
 
+### NEXT STEPS:
+
+GATHERING DATA: using the MSD, we need to combine the three datasets: 
+* MSD sample (10,000 songs)
+* Taste Profile subset - user data
+* MusicXMatch for lyrics
+
 
 ### Introduction :
 
