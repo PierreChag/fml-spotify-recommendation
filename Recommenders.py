@@ -15,7 +15,7 @@ class PopularityRecommender:
         # Generate a recommendation rank based upon score
         self.popularity_recommendations['Rank'] = self.popularity_recommendations['score'].rank(ascending=0, method='first')
 
-    def recommend(self, user_id, nb_of_recommendations, seed):
+    def recommend(self, user_id, nb_of_recommendations):
         """
         Use the popularity based recommender system model to make recommendations.
         Returns a DataFrame containing the recommendations ordered from the most likely to the less likely,
@@ -27,12 +27,14 @@ class PopularityRecommender:
 
 # Class for Item similarity based Recommender System model
 class ItemSimilarityRecommender:
-    def __init__(self, train_data):
+    def __init__(self, train_data, seed, sample_fraction):
         self.train_data = train_data
         self.cooccurence_matrix = None
         self.songs_dict = None
         self.rev_songs_dict = None
         self.item_similarity_recommendations = None
+        self.seed = seed
+        self.sample_fraction = sample_fraction
 
     def get_user_items(self, user):
         """
@@ -127,26 +129,45 @@ class ItemSimilarityRecommender:
         else:
             return df
 
-    def recommend(self, user_id, nb_of_recommendations, seed):
+    def recommend(self, user_id, nb_of_recommendations):
         """
         Use the item similarity based recommender system model to make recommendations
         Returns a DataFrame containing the recommendations ordered from the most likely to the less likely,
         and returns a set that contains the songs used to obtain the recommendation
         """
 
-        user_songs = self.get_user_items(user_id).sample(frac=0.5, random_state=seed)['song']
+        user_songs = self.get_user_items(user_id).sample(frac=self.sample_fraction, random_state=self.seed)['song']
         return self.generate_top_recommendations(self.get_all_items_train_data(), list(user_songs), nb_of_recommendations), set(user_songs)
 
 
 # Class for a Recommender System using the play count as ratings
 class PlayCountRecommender:
-    def __init__(self, train_data):
-        self.train_data = train_data
-        self.user_play_count = None
-        self.user_play_count_matrix = None
-        self.num_items = None
+    def __init__(self, train_data, seed, sample_fraction):
+        # Create a smaller version of the dataset for testing purpose.
+        self.train_data = train_data.groupby('user_id', as_index=False)
+        self.train_data = self.train_data.apply(lambda user_songs: user_songs.sample(frac=self.sample_fraction, random_state=self.seed))
+        # Create a matrix of users and play counts
+        self.user_play_count = self.train_data.pivot(index='user_id', columns='song', values='play_count').fillna(0)
+        self.user_play_count_matrix = self.user_play_count.values
+        # Number of users and items
+        self.num_items = self.user_play_count_matrix.shape[1]
+        # Compute the similarity matrix
+        self.similarity = self.cosine_matrix()
+        # Finding the index of the user
+        self.tup_user = []
+        i = 0
+        for user in self.user_play_count.index:
+            self.tup_user.append((user, i))
+            i += 1
+        self.tup_song = []
+        i = 0
+        for song in self.user_play_count.columns:
+            self.tup_song.append((song, i))
+            i += 1
+        self.seed = seed
+        self.sample_fraction = sample_fraction
 
-    def get_user_items(self, user):
+    def get_user_songs(self, user):
         """
         Return a pandas DataFrame that contains the unique items (songs) corresponding to a given user
         """
@@ -172,31 +193,16 @@ class PlayCountRecommender:
                 similarity[i, j] = dot_product / (magnitude_i * magnitude_j)
         return similarity
 
-    def recommend(self, user_id, nb_of_recommendations, seed):
+    def recommend(self, user_id, nb_of_recommendations):
         """
         Use the play count based recommender system model to make recommendations
         Returns a DataFrame containing the recommendations ordered from the most likely to the less likely,
         and returns a set that contains the songs used to obtain the recommendation
         """
 
-        user_songs = self.get_user_items(user_id).sample(frac=0.5, random_state=seed)['song']
-        # Create a matrix of users and play counts
-        self.user_play_count = self.train_data.pivot(index='user_id', columns='song', values='play_count').fillna(0)
-        self.user_play_count_matrix = self.user_play_count.values
-        # Number of users and items
-        self.num_items = self.user_play_count_matrix.shape[1]
-        similarity = self.cosine_matrix()
-
-        # Finding the index of the user
-        tup_user = []
-        i = 0
-        for user in self.user_play_count.index:
-            tup_user.append((user, i))
-            i += 1
-
         # Finding the index of the song in the list of tuples
         user_index = 0
-        for user in tup_user:
+        for user in self.tup_user:
             if user[0] == user_id:
                 user_index = user[1]
                 break
@@ -210,24 +216,18 @@ class PlayCountRecommender:
                 score = 0
                 for j in range(self.num_items):
                     if user_ratings[j] != 0:
-                        score += similarity[i, j] * user_ratings[j]
+                        score += self.similarity[i, j] * user_ratings[j]
                 item_scores[i] = score
 
         # Sort item scores in descending order
         sorted_item_scores = np.argsort(-item_scores)
 
-        tup = []
-        i = 0
-        for song in self.user_play_count.columns:
-            tup.append((song, i))
-            i += 1
-
         # Return the recommendations in a dataframe
         df_rec = pd.DataFrame(columns=['song', 'score'])
         for i in range(nb_of_recommendations):
-            rec_song = tup[sorted_item_scores[i]][0]
+            rec_song = self.tup_song[sorted_item_scores[i]][0]
             df_rec.loc[i] = [rec_song, item_scores[sorted_item_scores[i]]]
-        return df_rec, set(user_songs)
+        return df_rec, set(self.get_user_songs(user_id)['song'])
 
 
 # Class for a Recommender System using SVD with surprise
@@ -240,7 +240,7 @@ class PlayCountRecommender:
 
 
 # Class for a Recommender System using SVD with surprise
-class SurpriseRecommender():
+class SurpriseRecommender:
     def __init__(self, df_triplets):
         self.df_triplets = df_triplets
         self.reader = None
