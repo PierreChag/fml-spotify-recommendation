@@ -29,7 +29,7 @@ class Evaluation:
             evaluation_size = 20
         df_result = pd.DataFrame([[0, 0]] * evaluation_size, columns=['correct', 'total'])
         for studied_id in list(self.user_ids.sample(n=sample_size, random_state=self.seed)['user_id']):
-            recommendations, used_songs = recommender(studied_id, evaluation_size)
+            recommendations, used_songs, mix = recommender(studied_id, evaluation_size)
             recommendations = list(recommendations['song'])
             user_songs = set(self.df_songs[self.df_songs['user_id'] == studied_id]['song']) - used_songs
 
