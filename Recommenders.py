@@ -143,6 +143,8 @@ class ItemSimilarityRecommender:
 # Class for a Recommender System using the play count as ratings
 class PlayCountRecommender:
     def __init__(self, train_data, seed, sample_fraction):
+        self.seed = seed
+        self.sample_fraction = sample_fraction
         # Create a smaller version of the dataset for testing purpose.
         self.train_data = train_data.groupby('user_id', as_index=False)
         self.train_data = self.train_data.apply(lambda user_songs: user_songs.sample(frac=self.sample_fraction, random_state=self.seed))
@@ -164,8 +166,6 @@ class PlayCountRecommender:
         for song in self.user_play_count.columns:
             self.tup_song.append((song, i))
             i += 1
-        self.seed = seed
-        self.sample_fraction = sample_fraction
 
     def get_user_songs(self, user):
         """
