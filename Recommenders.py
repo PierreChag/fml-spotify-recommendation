@@ -21,8 +21,10 @@ class PopularityRecommender:
         Returns a DataFrame containing the recommendations ordered from the most likely to the less likely,
         and returns a set that contains the songs used to obtain the recommendation.
         """
-
-        return self.popularity_recommendations.head(nb_of_recommendations), set(), self.popularity_recommendations
+        if nb_of_recommendations is None:
+            return self.popularity_recommendations
+        else:
+            return self.popularity_recommendations.head(nb_of_recommendations)
 
 
 # Class for Item similarity based Recommender System model
@@ -33,9 +35,8 @@ class ItemSimilarityRecommender:
         self.songs_dict = None
         self.rev_songs_dict = None
         self.item_similarity_recommendations = None
-        
 
-    def get_user_items(self, user):
+    def get_user_songs(self, user):
         """
         Return a pandas DataFrame that contains the unique items (songs) corresponding to a given user
         """
@@ -44,7 +45,7 @@ class ItemSimilarityRecommender:
         user_items = user_data[['song']].drop_duplicates()
         return user_items
 
-    def get_item_users(self, item):
+    def get_song_users(self, item):
         """
         Get unique users for a given item (song)
         """
@@ -53,7 +54,7 @@ class ItemSimilarityRecommender:
         item_users = set(item_data['user_id'].unique())
         return item_users
 
-    def get_all_items_train_data(self):
+    def get_all_unique_songs(self):
         """
         Get unique items (songs) in the training data
         """
@@ -67,19 +68,19 @@ class ItemSimilarityRecommender:
 
         # Get users for all songs in user_songs.
         user_songs_users = []
-        for i in range(0, len(user_songs)):
-            user_songs_users.append(self.get_item_users(user_songs[i]))
+        for song in user_songs:
+            user_songs_users.append(self.get_song_users(song))
 
         # Initialize the item cooccurence matrix of size : len(user_songs) X len(songs)
         cooccurence_matrix = np.matrix(np.zeros(shape=(len(user_songs), len(all_songs))), float)
 
         # Calculate similarity between user songs and all unique songs in the training data
-        for i in range(0, len(all_songs)):
-            # Calculate unique listeners (users) of song (item) i
-            songs_i_data = self.train_data[self.train_data['song'] == all_songs[i]]
-            users_i = set(songs_i_data['user_id'].unique())
+        for i, song in enumerate(all_songs):
+            # Calculate unique listeners (users) of song i
+            song_i_data = self.train_data[self.train_data['song'] == song]
+            users_i = set(song_i_data['user_id'].unique())
 
-            for j in range(0, len(user_songs)):
+            for j in range(len(user_songs)):
                 # Get unique listeners (users) of song (item) j
                 users_j = user_songs_users[j]
                 # Calculate intersection of listeners of songs i and j
@@ -95,7 +96,7 @@ class ItemSimilarityRecommender:
 
         return cooccurence_matrix
 
-    def generate_top_recommendations(self, all_songs, user_songs):
+    def generate_top_recommendations(self, all_songs, user_songs, nb_of_recommendations):
         """
         Use the cooccurence matrix to make top recommendations
         """
@@ -117,9 +118,12 @@ class ItemSimilarityRecommender:
         # Fill the dataframe with top nb_of_recommendations item based recommendations
         rank = 1
         for i in range(0, len(sort_index)):
-            if ~np.isnan(sort_index[i][0]) and all_songs[sort_index[i][1]] not in user_songs:
-                df.loc[len(df)] = [all_songs[sort_index[i][1]], sort_index[i][0], rank]
-                rank = rank + 1
+            if nb_of_recommendations is None or rank <= nb_of_recommendations:
+                if ~np.isnan(sort_index[i][0]) and all_songs[sort_index[i][1]] not in user_songs:
+                    df.loc[len(df)] = [all_songs[sort_index[i][1]], sort_index[i][0], rank]
+                    rank += 1
+            else:
+                break
 
         # Handle the case where there are no recommendations
         if df.shape[0] == 0:
@@ -135,9 +139,12 @@ class ItemSimilarityRecommender:
         and returns a set that contains the songs used to obtain the recommendation
         """
 
-        user_songs = self.get_user_items(user_id)['song']
-        df = self.generate_top_recommendations(self.get_all_items_train_data(), list(user_songs))
-        return df.iloc[:nb_of_recommendations,:], set(user_songs), df
+        user_songs = set(self.get_user_songs(user_id)['song'])
+        df_rec = self.generate_top_recommendations(self.get_all_unique_songs(), list(user_songs), nb_of_recommendations)
+        if nb_of_recommendations is None:
+            return df_rec
+        else:
+            return df_rec.iloc[:nb_of_recommendations, :]
 
 
 # Class for a Recommender System using the play count as ratings
@@ -223,12 +230,59 @@ class PlayCountRecommender:
         user_songs = set(self.get_user_songs(user_id)['song'])
         df_rec = pd.DataFrame(columns=['song', 'score', 'rank_play_count'])
         rank = 1
-        for i in range(self.num_items - len(user_songs)):
-            rec_song = self.tup_song[sorted_item_scores[i]][0]
-            df_rec.loc[i] = [rec_song, item_scores[sorted_item_scores[i]], rank]
-            rank += 1
-        return df_rec.iloc[:nb_of_recommendations, :], user_songs, df_rec
+        if nb_of_recommendations is None:
+            for i in range(self.num_items - len(user_songs)):
+                rec_song = self.tup_song[sorted_item_scores[i]][0]
+                df_rec.loc[i] = [rec_song, item_scores[sorted_item_scores[i]], rank]
+                rank += 1
+            return df_rec
+        else:
+            for i in range(nb_of_recommendations):
+                rec_song = self.tup_song[sorted_item_scores[i]][0]
+                df_rec.loc[i] = [rec_song, item_scores[sorted_item_scores[i]], rank]
+                rank += 1
+            return df_rec
 
+
+def generate_reco_dataset(full_df, train_data, user_ids, reco_pop, reco_sim, reco_play, sample_size, seed):
+    full = []
+    for i, studied_id in enumerate(list(user_ids.sample(n=sample_size, random_state=seed)['user_id'])):
+        all_scores1 = reco_pop.recommend(studied_id, None)
+        all_scores2 = reco_sim.recommend(studied_id, None)
+        all_scores3 = reco_play.recommend(studied_id, None)
+        train_songs = set(train_data[train_data['user_id'] == studied_id].sort_values(by='play_count', ascending=False)['song'])
+
+        test_songs = set(full_df[full_df['user_id'] == studied_id]['song']) - train_songs
+
+        # Normalize the scores between 0 and 1
+        all_scores1['score_pop'] = (all_scores1['score'] - all_scores1['score'].min()) / (
+                    all_scores1['score'].max() - all_scores1['score'].min())
+        all_scores2['score_sim'] = (all_scores2['score'] - all_scores2['score'].min()) / (
+                    all_scores2['score'].max() - all_scores2['score'].min())
+        all_scores3['score_play_count'] = (all_scores3['score'] - all_scores3['score'].min()) / (
+                    all_scores3['score'].max() - all_scores3['score'].min())
+
+        # Merge in one dataframe
+        all_scores = pd.merge(all_scores1, all_scores2, on='song', how='outer')
+        all_scores = pd.merge(all_scores, all_scores3, on='song', how='outer')
+        all_scores = all_scores.fillna(0)
+
+        # Add column correction
+        all_scores['correct'] = 0
+        for song in test_songs:
+            all_scores.loc[all_scores['song'] == song, ['correct']] = 1
+        all_scores.drop(columns=['score', 'score_x', 'score_y', 'rank_pop', 'rank_sim', 'rank_play_count'], axis=1,
+                        inplace=True)
+        all_scores['user_id'] = studied_id
+        full += all_scores.values.tolist()
+        print(f"[{i + 1}/{sample_size}]")
+
+    # Remove useless column
+    full = pd.DataFrame(full, columns=['song', 'score_pop', 'score_sim', 'score_play_count', 'correct', 'user_id'])
+    full['score_tot'] = full['score_pop'] + full['score_sim'] + full['score_play_count']
+    full.drop(full[full['score_tot'] == 0].index, inplace=True)
+    full.drop(columns=['score_tot'], axis=1, inplace=True)
+    return full
 
 # Class for a Recommender System using SVD with surprise
 # from surprise import Reader, Dataset, SVD
