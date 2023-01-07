@@ -245,6 +245,11 @@ class PlayCountRecommender:
 
 
 def generate_reco_dataset(full_df, train_data, user_ids, reco_pop, reco_sim, reco_play, sample_size, seed):
+    """
+    Very long to run !
+    Compute the recommendation score for sample_size number of users using the 3 previous models.
+    Return the results combined in a big DataFrame.
+    """
     full = []
     for i, studied_id in enumerate(list(user_ids.sample(n=sample_size, random_state=seed)['user_id'])):
         all_scores1 = reco_pop.recommend(studied_id, None)
@@ -284,6 +289,31 @@ def generate_reco_dataset(full_df, train_data, user_ids, reco_pop, reco_sim, rec
     full.drop(columns=['score_tot'], axis=1, inplace=True)
     return full
 
+
+# Class of a recommender that combines the 3 previous models.
+class MixedRecommenders:
+    def __init__(self, model, df_test):
+        self.model = model
+        self.df_test = df_test
+
+    def recommend(self, user_id, nb_of_recommendations):
+        user_reco = self.df_test[self.df_test['user_id'] == user_id]
+        if user_reco.empty:
+            print(f"The user {user_id} is not included in the precalculated dataset.")
+            return None
+
+        predicted = self.model.predict(user_reco[['score_pop', 'score_sim', 'score_play_count']])
+        # Creates a dataframe that combines all the information.
+        res = pd.concat([user_reco['song'].reset_index(drop=True), pd.DataFrame(predicted, columns=['predicted'])],
+                        axis=1, join='outer', ignore_index=False, sort=False)
+        res = res.sort_values(['predicted', 'song'], ascending=[0, 1])
+        res['rank_mixed'] = res['predicted'].rank(ascending=0, method='first')
+        if nb_of_recommendations is None:
+            return res
+        else:
+            return res.head(nb_of_recommendations)
+
+
 # Class for a Recommender System using SVD with surprise
 # from surprise import Reader, Dataset, SVD
 # from surprise.model_selection import cross_validate
@@ -291,8 +321,6 @@ def generate_reco_dataset(full_df, train_data, user_ids, reco_pop, reco_sim, rec
 #                                                        precision_at_k,
 #                                                        recall_at_k, get_top_k_items)
 # from recommenders.models.surprise.surprise_utils import predict, compute_ranking_predictions
-
-
 # Class for a Recommender System using SVD with surprise
 class SurpriseRecommender:
     def __init__(self, df_triplets):
