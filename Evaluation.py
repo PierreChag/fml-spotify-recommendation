@@ -16,7 +16,7 @@ class Evaluation:
         self.df_songs = df_songs
         self.seed = random_seed
 
-    def evaluate(self, recommender, sample_size: int = 1000000, evaluation_size: int = 100):
+    def evaluate(self, recommender, name: str = "", sample_size: int = 1000000, evaluation_size: int = 100):
         """
         Evaluates our suggestion model on real users from the dataset.
         - recommender: function with the shape suggester(user_id, nb_of_recommendations) that returns a DataFrame
@@ -48,13 +48,15 @@ class Evaluation:
         # Plot the evolution of the accuracy
         ax = df_result['accuracy'].plot(
             title='Evolution of the accuracy in regards of the ranking in the recommendation',
-            figsize=(10, 5))
+            figsize=(10, 5),
+            label=name)
         ax.set_xlabel("Rank")
         ax.set_ylabel("Accuracy")
 
         # Compute accuracy over the 1, 5, 10, 20 first suggestions
         correct = df_result['correct'][0]
         total = df_result['total'][0]
+        print(f"Model {name}:")
         print(
             f"Accuracy of    the first suggestion  :    {100 * correct / total:.2f}% {proportion_confint(count=correct, nobs=total)}")
         correct = df_result['correct'].head(5).sum()

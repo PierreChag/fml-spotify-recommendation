@@ -314,6 +314,14 @@ class MixedRecommenders:
             return res.head(nb_of_recommendations)
 
 
+class ManualModel:
+    def __init__(self, weight):
+        self.weight = weight
+
+    def predict(self, features):
+        return (features['score_pop'] * self.weight[0] + features['score_sim'] * self.weight[1] + features['score_play_count'] * self.weight[2]).to_numpy()
+
+
 # Class for a Recommender System using SVD with surprise
 # from surprise import Reader, Dataset, SVD
 # from surprise.model_selection import cross_validate
