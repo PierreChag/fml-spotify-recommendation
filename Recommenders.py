@@ -292,9 +292,10 @@ def generate_reco_dataset(full_df, train_data, user_ids, reco_pop, reco_sim, rec
 
 # Class of a recommender that combines the 3 previous models.
 class MixedRecommenders:
-    def __init__(self, model, df_test):
+    def __init__(self, model, df_test, features):
         self.model = model
         self.df_test = df_test
+        self.features = features
 
     def recommend(self, user_id, nb_of_recommendations):
         user_reco = self.df_test[self.df_test['user_id'] == user_id]
@@ -302,7 +303,7 @@ class MixedRecommenders:
             print(f"The user {user_id} is not included in the precalculated dataset.")
             return None
 
-        predicted = self.model.predict(user_reco[['score_pop', 'score_sim', 'score_play_count']])
+        predicted = self.model.predict(user_reco[self.features])
         # Creates a dataframe that combines all the information.
         res = pd.concat([user_reco['song'].reset_index(drop=True), pd.DataFrame(predicted, columns=['predicted'])],
                         axis=1, join='outer', ignore_index=False, sort=False)
